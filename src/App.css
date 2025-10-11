@@ -1,0 +1,51 @@
+
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.card {
+  padding: 2em;
+}
+
+/* Ranking Table Styles */
+.rankings-table {
+  width: 100%;
+  border-collapse: collapse;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  margin-top: 1rem;
+}
+
+.rankings-table th {
+  background-color: #1f2937;
+  color: white;
+  text-align: left;
+  padding: 0.75rem 1rem;
+}
+
+.rankings-table td {
+  padding: 0.75rem 1rem;
+}
+
+.rankings-table tr:nth-child(even) {
+  background-color: #f3f4f6;
+}
+
+.rankings-table tr:hover {
+  background-color: #e0f2fe;
+}
+
+.top-1 { background-color: #FFD700; } /* gold */
+.top-2 { background-color: #C0C0C0; } /* silver */
+.top-3 { background-color: #cd7f32; } /* bronze */
+
+.runner-avatar {
+  height: 40px;
+  width: 40px;
+  border-radius: 50%;
+  margin-right: 8px;
+}

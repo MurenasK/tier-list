@@ -1,0 +1,266 @@
+/* Global Styles */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Roboto', sans-serif;
+  background-color: #1e1e1e;
+  color: #eaeaea;
+  line-height: 1.6;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+h1, h2, h3 {
+  font-weight: 600;
+  color: #f5c518;
+}
+
+a {
+  color: #4a90e2;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* Cards for each component */
+.card {
+  background-color: #2a2a2a;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+  margin-bottom: 20px;
+  padding: 20px;
+}
+
+.card h2 {
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+th, td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #444;
+}
+
+th {
+  background-color: #333;
+  color: #f5c518;
+}
+
+tr:nth-child(even) {
+  background-color: #2a2a2a;
+}
+
+tr:hover {
+  background-color: #3a3a3a;
+}
+
+/* Form Inputs and Buttons */
+input,
+select,
+button {
+  font-size: 1rem;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #555;
+  background-color: #1a1a1a;
+  color: #fff;
+}
+
+input:focus,
+select:focus,
+button:focus {
+  outline: none;
+  border-color: #f5c518;
+}
+
+button {
+  cursor: pointer;
+  font-weight: 500;
+  background-color: #4a90e2;
+  border: none;
+  transition: background-color 0.2s;
+}
+
+button:hover {
+  background-color: #357ab7;
+}
+
+/* RunnerActions Table Specific */
+.runner-actions-table th,
+.runner-actions-table td {
+  border-bottom: 1px solid #555;
+}
+
+.runner-actions-table tr:hover {
+  background-color: #444;
+}
+
+/* RankEditor Inputs */
+.rank-editor {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.rank-editor input {
+  width: 100px;
+}
+
+/* Feedback / Alerts */
+.alert {
+  background-color: #333;
+  border-left: 5px solid #f5c518;
+  padding: 10px;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.alert.success {
+  border-left-color: #4caf50;
+}
+
+.alert.error {
+  border-left-color: #f44336;
+}
+
+/* Competition Form */
+.competition-card {
+  max-width: 500px;
+}
+
+.competition-card input,
+.competition-card select {
+  width: 100%;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .card-body {
+    gap: 10px;
+  }
+
+  input,
+  select,
+  button {
+    font-size: 0.9rem;
+  }
+}
+
+/* Rankings table */
+.rankings-card {
+  background-color: #2a2a2a;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+.rankings-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rankings-table th,
+.rankings-table td {
+  padding: 12px;
+  border-bottom: 1px solid #444;
+  text-align: left;
+}
+
+.rankings-table th {
+  background-color: #333;
+  color: #f5c518;
+}
+
+.rankings-table tr:nth-child(even) {
+  background-color: #2a2a2a;
+}
+
+.rankings-table tr:hover {
+  background-color: #3a3a3a;
+}
+
+/* Photo styling */
+.runner-photo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.runner-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+
+.runner-table th,
+.runner-table td {
+  border: 1px solid #444;
+  padding: 8px;
+  text-align: left;
+}
+
+.runner-photo {
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.add-runner input {
+  margin-right: 8px;
+  padding: 6px;
+}
+
+.add-runner button {
+  padding: 6px 12px;
+  background-color: #28a745;
+  color: white;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+}
+
+.add-runner button:hover {
+  background-color: #218838;
+}
+
+.feedback {
+  margin-top: 12px;
+  padding: 6px;
+  background-color: #444;
+  color: white;
+  border-radius: 4px;
+}
+
+.message {
+  margin-top: 1rem;
+  padding: 0.5rem;
+  background-color: #333;
+  text-align: center;
+  border-radius: 6px;
+}
+
+
+
