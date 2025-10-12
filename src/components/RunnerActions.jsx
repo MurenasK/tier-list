@@ -59,34 +59,31 @@ function RunnerActions() {
 
   // Update rating
   const updateRating = async (id, rating) => {
-  try {
-    const payload = { rating };
-    const res = await fetch(`http://localhost:4000/api/runners/${id}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: PASSWORD,
-      },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error("Failed to update rating");
-    setMessage(`🏅 Runner ${id} rating updated`);
-    fetchRunners();
-  } catch (err) {
-    console.error(err);
-    setMessage("❌ Failed to update rating: " + (err.message || ""));
-  }
+    try {
+      const parsedRating = Number(rating);
+      if (Number.isNaN(parsedRating)) {
+        setMessage("❌ Invalid rating value");
+        return;
+      }
+
+      const res = await fetch(`http://localhost:4000/api/runners/${id}/elo`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: PASSWORD,
+        },
+        body: JSON.stringify({ rating: parsedRating }), // must be "rating"
+      });
+
+      if (!res.ok) throw new Error("Failed to update rating");
+
+      setMessage(`🏅 Runner ${id} rating updated`);
+      fetchRunners();
+    } catch (err) {
+      console.error(err);
+      setMessage("❌ Failed to update rating: " + (err.message || ""));
+    }
 };
-
-
-  const handleRankChange = (id, value) => {
-    setRunners(prev => prev.map(r => r.id === id ? { ...r, rating: value } : r));
-  };
-
-  const handleRankBlur = (id, value) => {
-    const parsed = Number(value);
-    updateRank(id, Number.isNaN(parsed) ? null : parsed);
-  };
 
   return (
     <div className="runner-actions-card">
@@ -122,13 +119,18 @@ function RunnerActions() {
                 <td>
                   <input
                     type="number"
-                    defaultValue={runner.rating ?? ""}
-                    onChange={(e) =>
-                      setRunners(prev => prev.map(r => r.id === runner.id ? { ...r, rating: e.target.value } : r))
-                    }
+                    defaultValue={runner.rating ?? 0}
+                    onChange = {(e) => {
+                      const val = parseFloat(e.target.value);
+                      setRunners(prev =>
+                        prev.map(r =>
+                          r.id === runner.id ? { ...r, rating: Number.isNaN(val) ? 0 : val } : r
+                        )
+                      );
+                    }}
                     onBlur={(e) => {
-                      const parsed = Number(e.target.value);
-                      updateRating(runner.id, Number.isNaN(parsed) ? null : parsed);
+                      const val = parseFloat(e.target.value);
+                      updateRating(runner.id, Number.isNaN(val) ? 0 : val);
                     }}
                   />
                 </td>

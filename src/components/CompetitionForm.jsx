@@ -51,72 +51,89 @@ export default function CompetitionForm() {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  try {
-    const activeCompetitors = competitors.filter(c => c.participated);
+    try {
+      const activeCompetitors = competitors.filter(c => c.participated);
 
-    // 🧮 1️⃣ Calculate new ratings using your existing function
-    const updatedRatings = calculateRatings({
-      runners: activeCompetitors,
-      competitionType: difficulty,
-      specialRunnerId,
-      specialRunnerPresent,
-    });
-
-    // 💾 2️⃣ Save competition info to the backend
-    await axios.post(
-      "http://localhost:4000/api/competitions",
-      {
-        name,
-        date,
-        difficulty,
-        competitors: updatedRatings,
-        specialRunnerPresent,
+      // 🧮 1️⃣ Calculate new ratings
+      const updatedRatings = calculateRatings({
+        runners: activeCompetitors,
+        competitionType: difficulty,
         specialRunnerId,
-      },
-      { headers: { Authorization: PASSWORD } }
-    );
+        specialRunnerPresent,
+      });
 
-    // 🔁 3️⃣ Update each runner’s rating in your runners table
-    await Promise.all(
-      updatedRatings.map(async (runner) => {
-        try {
-          await axios.put(`http://localhost:4000/api/runners/${runner.id}`, {
-            rating: runner.newRating,
-            lastActiveDate: new Date().toISOString(),
-          });
-        } catch (err) {
-          console.warn(`⚠️ Failed to update runner ${runner.name}:`, err);
-        }
-      })
-    );
+      // 💾 2️⃣ Save competition info to the backend
+      // We POST without competitors first
+      const compRes = await axios.post(
+        "http://localhost:4000/api/competitions",
+        { name, date, difficulty },
+        { headers: { Authorization: PASSWORD } }
+      );
 
-    // 🧠 4️⃣ Update local state so UI reflects new ratings instantly
-    setAllRunners((prev) =>
-      prev.map((r) => {
-        const updated = updatedRatings.find((u) => u.id === r.id);
-        return updated ? { ...r, rating: updated.newRating } : r;
-      })
-    );
+      const competitionId = compRes.data.id; // <-- make sure your backend returns the new competition ID!
 
-    // ✅ 5️⃣ Success message
-    setMessage(`✅ Competition "${name}" saved & ratings updated!`);
-    setTimeout(() => setMessage(""), 4000);
+      // 🏃 3️⃣ Add competitors to this competition
+      await axios.post(
+        `http://localhost:4000/api/competitions/${competitionId}/runners`,
+        { 
+          runners: activeCompetitors.map(c => ({
+          id: c.id,
+          time: isNaN(c.time) ? 0 : c.time
+          }))
+        },
+        { headers: { Authorization: PASSWORD } }
+      );
 
-    // ♻️ 6️⃣ Reset form
-    setName("");
-    setDate("");
-    setDifficulty("medium");
-    setCompetitors([]);
-    setSpecialRunnerId(null);
-    setSpecialRunnerPresent(false);
-    closeForm();
-  } catch (err) {
-    console.error("❌ Error submitting competition:", err);
-    setMessage("❌ Failed to save competition or update ratings: " + err.message);
-  }
-};
+      // 🔁 4️⃣ Update each runner’s rating in your runners table
+      await Promise.all(
+        updatedRatings.map(async (runner) => {
+          try {
+            const rating = Number(runner.newRating);
+            if (Number.isNaN(rating)) {
+              console.warn(`⚠️ Skipping ${runner.name} — invalid rating:`, runner.newRating);
+              return;
+            }
+
+            await axios.patch(
+              `http://localhost:4000/api/runners/${runner.id}/elo`,
+              { rating }, // must be numeric
+              { headers: { Authorization: PASSWORD } }
+            );
+          } catch (err) {
+            console.warn(`⚠️ Failed to update runner ${runner.name}:`, err.response?.data || err.message);
+          }
+        })
+      );
+
+
+      // 🧠 5️⃣ Update local state
+      setAllRunners((prev) =>
+        prev.map((r) => {
+          const updated = updatedRatings.find((u) => u.id === r.id);
+          return updated ? { ...r, rating: updated.newRating } : r;
+        })
+      );
+
+      // ✅ 6️⃣ Success message
+      setMessage(`✅ Competition "${name}" saved & ratings updated!`);
+      setTimeout(() => setMessage(""), 4000);
+
+      // ♻️ 7️⃣ Reset form
+      setName("");
+      setDate("");
+      setDifficulty("medium");
+      setCompetitors([]);
+      setSpecialRunnerId(null);
+      setSpecialRunnerPresent(false);
+      closeForm();
+    } catch (err) {
+      console.error("❌ Error submitting competition:", err);
+      setMessage("❌ Failed to save competition or update ratings: " + err.message);
+    }
+  };
+
 
 
   return (
@@ -149,8 +166,8 @@ export default function CompetitionForm() {
                 value={difficulty}
                 onChange={e => setDifficulty(e.target.value)}
               >
-                <option value="easy">Kaimo lyga</option>
-                <option value="medium">Užsienio random</option>
+                <option value="local">Kaimo lyga</option>
+                <option value="outside">Užsienio random</option>
                 <option value="national">LT Čampas</option>
                 <option value="international">Užsienio už LT</option>
               </select>
@@ -189,9 +206,9 @@ export default function CompetitionForm() {
                       <input
                         type="number"
                         placeholder="Time (sec)"
-                        value={c.time}
+                        value={c.time ?? 0}
                         onChange={e =>
-                          updateCompetitor(c.id, "time", parseFloat(e.target.value))
+                          updateCompetitor(c.id, "time", parseFloat(e.target.value) || 0)
                         }
                         required
                       />

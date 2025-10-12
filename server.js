@@ -11,29 +11,46 @@ app.use(express.json());
 // --- Database ---
 const db = new Database("runners.db");
 
-// Create runners table (no photo column)
+// --- Tables ---
+
+// Runners table
 db.prepare(`
   CREATE TABLE IF NOT EXISTS runners (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
+    lastActiveDate TEXT DEFAULT (datetime('now')),
     rank INTEGER,
     rating INTEGER DEFAULT 1000
   )
 `).run();
 
+// Competitions table
 db.prepare(`
   CREATE TABLE IF NOT EXISTS competitions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     date TEXT,
-    difficulty INTEGER
+    difficulty TEXT
+  )
+`).run();
+
+// Competition participants table
+db.prepare(`
+  CREATE TABLE IF NOT EXISTS competition_runners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    competition_id INTEGER NOT NULL,
+    runner_id INTEGER NOT NULL,
+    time REAL DEFAULT 0,
+    FOREIGN KEY (competition_id) REFERENCES competitions(id),
+    FOREIGN KEY (runner_id) REFERENCES runners(id),
+    UNIQUE (competition_id, runner_id)
   )
 `).run();
 
 // --- Auth Middleware ---
 const authMiddleware = (req, res, next) => {
   const auth = req.headers.authorization;
-  const PASSWORD = "NiggasInParis";
+  const PASSWORD = "NiggasInParis"; // change this
   if (auth === PASSWORD) next();
   else res.status(403).json({ error: "Forbidden" });
 };
@@ -43,111 +60,96 @@ const authMiddleware = (req, res, next) => {
 // Get all runners
 app.get("/api/runners", (req, res) => {
   const runners = db.prepare("SELECT * FROM runners").all();
-  // Map elo → rating
-  const mapped = runners.map(r => ({
-    id: r.id,
-    name: r.name,
-    team: r.team ?? null,
-    rating: r.rating ?? 1000,     // alias elo -> rating
-    photo_url: r.photo || null,
-    quote: r.quote ?? null,
-    photo: r.photo ?? null
-  }));
-  res.json(mapped);
+  res.json(runners);
 });
-
 
 // Add runner
 app.post("/api/runners", authMiddleware, (req, res) => {
-  try {
-    const { name } = req.body;
-    db.prepare("INSERT INTO runners (name) VALUES (?)").run(name);
-    res.json({ message: "Runner added!" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
-  }
+  const { name } = req.body;
+  const info = db.prepare("INSERT INTO runners (name) VALUES (?)").run(name);
+  res.json({ message: "Runner added!", id: info.lastInsertRowid });
 });
 
-// Delete runner
-app.delete("/api/runners/:id", authMiddleware, (req, res) => {
-  try {
-    const { id } = req.params;
-    db.prepare("DELETE FROM runners WHERE id = ?").run(id);
-    res.json({ message: `Runner ${id} deleted` });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-// Update runner rank (PATCH)
-app.patch("/api/runners/:id/rank", authMiddleware, (req, res) => {
-  try {
-    const { id } = req.params;
-    const { rank } = req.body;
-
-    if (rank === undefined) {
-      return res.status(400).json({ error: "Rank is required" });
-    }
-
-    db.prepare("UPDATE runners SET rank = ? WHERE id = ?").run(rank, id);
-    res.json({ message: `Runner ${id} rating updated (PATCH)` });
-    console.log(`Runner ${id} rank updated to ${rating}`);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-// Update runner ELO
+// Update runner rating (ELO)
 app.patch("/api/runners/:id/elo", authMiddleware, (req, res) => {
-  try {
-    const { id } = req.params;
-    const { elo } = req.body;
-
-    if (elo === undefined) {
-      return res.status(400).json({ error: "ELO is required" });
-    }
-
-    db.prepare("UPDATE runners SET rating = ? WHERE id = ?").run(elo, id);
-    res.json({ message: `Runner ${id} ELO updated` });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-
-// Competitions
-app.post("/api/competitions", authMiddleware, (req, res) => {
-  try {
-    const { name, date, difficulty } = req.body;
-    db.prepare("INSERT INTO competitions (name, date, difficulty) VALUES (?, ?, ?)").run(name, date, difficulty);
-    res.json({ message: "Competition added!" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-app.get("/api/competitions", (req, res) => {
-  const competitions = db.prepare("SELECT * FROM competitions").all();
-  res.json(competitions);
-});
-
-// Update runner rating (elo)
-app.patch("/api/runners/:id", authMiddleware, (req, res) => {
   const { id } = req.params;
   const { rating } = req.body;
   if (rating == null) return res.status(400).json({ error: "Rating is required" });
   db.prepare("UPDATE runners SET rating = ? WHERE id = ?").run(rating, id);
-  res.json({ message: `Runner ${id} rating updated` });
+  res.json({ message: `Runner ${id} Rating updated` });
 });
 
+// Updates runner time
+const updateDateStmt = db.prepare(`
+  UPDATE runners SET lastActiveDate = datetime('now') WHERE id = ?
+`);
 
-// Start server
+const insertMany = db.transaction((runners) => {
+  for (const r of runners) {
+    stmt.run(competition_id, r.id, r.time || 0);
+    updateDateStmt.run(r.id); // mark runner as active
+  }
+});
+
+// --- Competitions ---
+
+// Add competition
+app.post("/api/competitions", authMiddleware, (req, res) => {
+  const { name, date, difficulty } = req.body;
+  const info = db.prepare("INSERT INTO competitions (name, date, difficulty) VALUES (?, ?, ?)").run(name, date, difficulty);
+  res.json({ message: "Competition added!", id: info.lastInsertRowid });
+});
+
+// Add runners to a competition with times
+app.post("/api/competitions/:id/runners", authMiddleware, (req, res) => {
+  try {
+    const { id: competition_id } = req.params;
+    const { runners } = req.body; // [{ id: runnerId, time: 123 }, ...]
+
+    if (!Array.isArray(runners)) return res.status(400).json({ error: "runners must be an array" });
+
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO competition_runners (competition_id, runner_id, time)
+      VALUES (?, ?, ?)
+    `);
+
+    const insertMany = db.transaction((runners) => {
+      for (const r of runners) stmt.run(competition_id, r.id, r.time || 0);
+    });
+
+    insertMany(runners);
+
+    res.json({ message: "Runners added to competition" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Get all competitions with participants
+app.get("/api/competitions", (req, res) => {
+  try {
+    const competitions = db.prepare("SELECT * FROM competitions").all();
+
+    const competitionsWithParticipants = competitions.map((comp) => {
+      const participants = db.prepare(`
+        SELECT r.id, r.name, cr.time
+        FROM competition_runners cr
+        JOIN runners r ON r.id = cr.runner_id
+        WHERE cr.competition_id = ?
+      `).all(comp.id);
+
+      return { ...comp, participants };
+    });
+
+    res.json(competitionsWithParticipants);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// --- Start server ---
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
-

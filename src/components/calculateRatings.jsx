@@ -13,15 +13,22 @@ export function calculateRatings({
     international: 2.0,
   };
 
+  console.log("Calculating ratings for competition type:", competitionType);
+
+  // --- Base constants ---
   const BASE_DECAY_RATE = 0.95;
   const MIN_DECAY_FACTOR = 0.7;
-  const MAX_GAIN = 50;
-  const MAX_LOSS = -50;
   const TIME_IMPACT_DIVISOR = 5;
   const EXPECTATION_SPREAD = 400;
+  const ELO_SCALER = 200; // 🟩 boosts rating swings to Faceit-like range
+
+  // --- Max bounds (after scaling) ---
+  const MAX_GAIN = 50;
+  const MAX_LOSS = -50;
 
   const K = competitionCoefficients[competitionType] || 1.0;
 
+  // --- Derived stats ---
   const sorted = [...runners].sort((a, b) => a.rank - b.rank);
   const L = Math.max(...runners.map(r => r.rating));
   const avgTop5 =
@@ -32,19 +39,21 @@ export function calculateRatings({
   const K_adj = K * (avgTop5 / 2000);
   const avgTime = runners.reduce((sum, r) => sum + r.time, 0) / runners.length;
 
+  // --- Main calc ---
   const updated = runners.map(r => {
     const { rating: R_i, rank, time, id, lastActiveDate } = r;
+
     const E_i = 1 / (1 + Math.pow(10, (L - R_i) / EXPECTATION_SPREAD));
     const S_i = (runners.length - rank + 1) / runners.length;
     const TPF_i = 1 + ((avgTime - time) / avgTime) / TIME_IMPACT_DIVISOR;
 
     const monthsInactive =
-      (today - new Date(lastActiveDate)) / (1000 * 60 * 60 * 24 * 30);
+      (today - new Date(lastActiveDate || today)) / (1000 * 60 * 60 * 24 * 30);
     const DecayFactor = Math.max(Math.pow(BASE_DECAY_RATE, monthsInactive), MIN_DECAY_FACTOR);
     const Balance = 1 - R_i / (L + 200);
 
-    // Base rating change
-    let delta = K_adj * (S_i - E_i) * Balance * TPF_i;
+    // 🧮 Stronger base rating change
+    let delta = K_adj * (S_i - E_i) * Balance * TPF_i * ELO_SCALER;
 
     // ✅ Apply penalty only if special runner present and you were beaten by him
     if (specialRunnerPresent && specialRunnerId) {
@@ -55,6 +64,7 @@ export function calculateRatings({
       }
     }
 
+    // ✂️ Cap values to your defined range
     delta = Math.max(Math.min(delta, MAX_GAIN), MAX_LOSS);
     const newRating = R_i * DecayFactor + delta;
 
