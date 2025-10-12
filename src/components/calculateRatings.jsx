@@ -7,9 +7,8 @@ export function calculateRatings({
   specialRunnerPresent = false,
 }) {
   const competitionCoefficients = {
-    easy: 0.8,
-    medium: 1.0,
-    hard: 1.5,
+    local: 1.0,
+    outside: 1.2,
     national: 1.5,
     international: 2.0,
   };

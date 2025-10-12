@@ -1,6 +1,7 @@
 import { useState, useEffect, use } from "react";
 import axios from "axios";
 import { calculateRatings } from "./calculateRatings";
+import "./CompsStyling/CompetitionForm.css";
 
 export default function CompetitionForm() {
   const [showForm, setShowForm] = useState(false);
@@ -29,6 +30,8 @@ export default function CompetitionForm() {
         console.error("Failed to fetch runners:", err);
       }
     };
+
+    fetchRunners();
   })
 
   const handleAddRunner = runner => {
@@ -47,56 +50,86 @@ export default function CompetitionForm() {
     );
   };
 
-  const handleSubmit = async e => {
-    e.preventDefault();
+  const handleSubmit = async (e) => {
+  e.preventDefault();
 
-    try {
-      const activeCompetitors = competitors.filter(c => c.participated);
+  try {
+    const activeCompetitors = competitors.filter(c => c.participated);
 
-      const updatedRatings = calculateRatings({
-        runners: activeCompetitors,
-        competitionType: difficulty,
-        specialRunnerId,
+    // 🧮 1️⃣ Calculate new ratings using your existing function
+    const updatedRatings = calculateRatings({
+      runners: activeCompetitors,
+      competitionType: difficulty,
+      specialRunnerId,
+      specialRunnerPresent,
+    });
+
+    // 💾 2️⃣ Save competition info to the backend
+    await axios.post(
+      "http://localhost:4000/api/competitions",
+      {
+        name,
+        date,
+        difficulty,
+        competitors: updatedRatings,
         specialRunnerPresent,
-      });
+        specialRunnerId,
+      },
+      { headers: { Authorization: PASSWORD } }
+    );
 
-      await axios.post(
-        "http://localhost:4000/api/competitions",
-        {
-          name,
-          date,
-          difficulty,
-          competitors: updatedRatings,
-          specialRunnerPresent,
-          specialRunnerId,
-        },
-        { headers: { Authorization: PASSWORD } }
-      );
+    // 🔁 3️⃣ Update each runner’s rating in your runners table
+    await Promise.all(
+      updatedRatings.map(async (runner) => {
+        try {
+          await axios.put(`http://localhost:4000/api/runners/${runner.id}`, {
+            rating: runner.newRating,
+            lastActiveDate: new Date().toISOString(),
+          });
+        } catch (err) {
+          console.warn(`⚠️ Failed to update runner ${runner.name}:`, err);
+        }
+      })
+    );
 
-      setMessage(`✅ Competition "${name}" saved with ${activeCompetitors.length} participants!`);
-      setName("");
-      setDate("");
-      setDifficulty("medium");
-      setCompetitors([]);
-      setSpecialRunnerId(null);
-      setSpecialRunnerPresent(false);
-      closeForm();
-    } catch (err) {
-      setMessage("❌ Failed to save competition: " + err.message);
-    }
-  };
+    // 🧠 4️⃣ Update local state so UI reflects new ratings instantly
+    setAllRunners((prev) =>
+      prev.map((r) => {
+        const updated = updatedRatings.find((u) => u.id === r.id);
+        return updated ? { ...r, rating: updated.newRating } : r;
+      })
+    );
+
+    // ✅ 5️⃣ Success message
+    setMessage(`✅ Competition "${name}" saved & ratings updated!`);
+    setTimeout(() => setMessage(""), 4000);
+
+    // ♻️ 6️⃣ Reset form
+    setName("");
+    setDate("");
+    setDifficulty("medium");
+    setCompetitors([]);
+    setSpecialRunnerId(null);
+    setSpecialRunnerPresent(false);
+    closeForm();
+  } catch (err) {
+    console.error("❌ Error submitting competition:", err);
+    setMessage("❌ Failed to save competition or update ratings: " + err.message);
+  }
+};
+
 
   return (
     <>
       <button onClick={openForm} className="open-form-btn">
-        🏁 Add Competition
+        🏁 Pridėti varžybas
       </button>
 
       {showForm && (
         <div className="competition-modal">
           <div className="competition-card">
             <button className="close-btn" onClick={closeForm}>✖</button>
-            <h2>🏟️ Add Competition</h2>
+            <h2>🏟️ Varžybos</h2>
 
             <form onSubmit={handleSubmit} className="competition-form">
               <input
@@ -116,16 +149,15 @@ export default function CompetitionForm() {
                 value={difficulty}
                 onChange={e => setDifficulty(e.target.value)}
               >
-                <option value="easy">Easy</option>
-                <option value="medium">Medium</option>
-                <option value="hard">Hard</option>
-                <option value="national">National</option>
-                <option value="international">International</option>
+                <option value="easy">Kaimo lyga</option>
+                <option value="medium">Užsienio random</option>
+                <option value="national">LT Čampas</option>
+                <option value="international">Užsienio už LT</option>
               </select>
 
               <hr />
 
-              <h3>🏃 Select Runners</h3>
+              <h3>🏃 Pasirinkti bėgikus</h3>
               <div className="runner-list">
                 {allRunners.map(r => (
                   <div key={r.id} className="runner-select-row">
@@ -150,7 +182,7 @@ export default function CompetitionForm() {
               {competitors.length > 0 && (
                 <>
                   <hr />
-                  <h3>📊 Competitor Info</h3>
+                  <h3>📊 Info</h3>
                   {competitors.map(c => (
                     <div key={c.id} className="competitor-row">
                       <span>{c.name}</span>
@@ -172,7 +204,7 @@ export default function CompetitionForm() {
                             setSpecialRunnerId(specialRunnerId === c.id ? null : c.id)
                           }
                         />
-                        Special
+                        JANUŠIS?
                       </label>
                     </div>
                   ))}
@@ -185,12 +217,12 @@ export default function CompetitionForm() {
                   checked={specialRunnerPresent}
                   onChange={() => setSpecialRunnerPresent(!specialRunnerPresent)}
                 />{" "}
-                Special runner was present
+                JANUŠIS DALYVAUJA?
               </label>
 
               <hr />
 
-              <button type="submit">💾 Save Competition</button>
+              <button type="submit">💾 Išsaugoti varžybas</button>
             </form>
 
             {message && <div className="competition-message">{message}</div>}

@@ -90,7 +90,7 @@ function RunnerActions() {
 
   return (
     <div className="runner-actions-card">
-      <h2>Runner Actions</h2>
+      <h2>Bėgikų veiksmai</h2>
 
       <div className="add-runner">
         <input
@@ -99,7 +99,7 @@ function RunnerActions() {
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <button onClick={addRunner}>Add Runner</button>
+        <button onClick={addRunner}>Pridėti bėgiką</button>
       </div>
 
       {message && <div className="message">{message}</div>}
@@ -110,8 +110,8 @@ function RunnerActions() {
             <tr>
               <th>ID</th>
               <th>Vardas</th>
-              <th>Rank</th>
-              <th>Actions</th>
+              <th>Reitingas</th>
+              <th>Veiksmai</th>
             </tr>
           </thead>
           <tbody>
@@ -134,7 +134,7 @@ function RunnerActions() {
                 </td>
                 <td>
                   <button onClick={() => deleteRunner(runner.id)}>
-                    Delete
+                    Naikinti
                   </button>
                 </td>
               </tr>
