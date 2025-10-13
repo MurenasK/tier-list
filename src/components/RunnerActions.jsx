@@ -1,89 +1,82 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
-function RunnerActions() {
+export default function RunnerActions() {
   const [runners, setRunners] = useState([]);
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
-
-  const PASSWORD = "NiggasInParis";
-
-  // Load runners
-  const fetchRunners = async () => {
-    const res = await fetch("http://localhost:4000/api/runners");
-    const data = await res.json();
-    setRunners(data);
-  };
+  const hasFetched = useRef(false); // prevent multiple fetches
 
   useEffect(() => {
-    fetchRunners();
+    if (!hasFetched.current) {
+      const fetchRunners = async () => {
+        try {
+          const res = await fetch("/api/runners");
+          const data = await res.json();
+          setRunners(data);
+          hasFetched.current = true;
+        } catch (err) {
+          console.error(err);
+          setMessage("❌ Nepavyko gauti bėgikų");
+        }
+      };
+      fetchRunners();
+    }
   }, []);
 
-  // Add runner
   const addRunner = async () => {
     if (!name.trim()) return;
     try {
-      const res = await fetch("http://localhost:4000/api/runners", {
+      const res = await fetch("/api/runners", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: PASSWORD,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
-
-      if (!res.ok) throw new Error("Failed to add runner");
-      setMessage("✅ Runner added!");
+      if (!res.ok) throw new Error("Nepavyko pridėti bėgiko");
+      const data = await res.json();
+      setRunners(prev => [...prev, { id: data.id, name, rating: 1000 }]);
+      setMessage("✅ Bėgikas pridėtas");
       setName("");
-      fetchRunners();
     } catch (err) {
       console.error(err);
-      setMessage("❌ Failed to add runner");
+      setMessage("❌ Pridėti bėgiko nepavyko");
     }
   };
 
-  // Delete runner
   const deleteRunner = async (id) => {
     try {
-      const res = await fetch(`http://localhost:4000/api/runners/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: PASSWORD },
-      });
-      if (!res.ok) throw new Error("Failed to delete runner");
-      setMessage(`🗑️ Runner ${id} deleted`);
-      fetchRunners();
+      const res = await fetch(`/api/runners/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Nepavyko ištrinti");
+      setRunners(prev => prev.filter(r => r.id !== id));
+      setMessage(`🗑️ Bėgikas ${id} ištrintas`);
     } catch (err) {
       console.error(err);
-      setMessage("❌ Failed to delete runner");
+      setMessage("❌ Trinti nepavyko");
     }
   };
 
-  // Update rating
-  const updateRating = async (id, rating) => {
-    try {
-      const parsedRating = Number(rating);
-      if (Number.isNaN(parsedRating)) {
-        setMessage("❌ Invalid rating value");
-        return;
-      }
-
-      const res = await fetch(`http://localhost:4000/api/runners/${id}/elo`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: PASSWORD,
-        },
-        body: JSON.stringify({ rating: parsedRating }), // must be "rating"
-      });
-
-      if (!res.ok) throw new Error("Failed to update rating");
-
-      setMessage(`🏅 Runner ${id} rating updated`);
-      fetchRunners();
-    } catch (err) {
-      console.error(err);
-      setMessage("❌ Failed to update rating: " + (err.message || ""));
-    }
-};
+  const updateRating = (() => {
+    let timeout;
+    return (id, rating) => {
+      setRunners(prev =>
+        prev.map(r => (r.id === id ? { ...r, rating } : r))
+      );
+      clearTimeout(timeout);
+      timeout = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/runners/${id}/elo`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rating }),
+          });
+          if (!res.ok) throw new Error("Nepavyko atnaujinti reitingo");
+          setMessage(`🏅 Bėgiko ${id} reitingas atnaujintas`);
+        } catch (err) {
+          console.error(err);
+          setMessage("❌ Reitingo atnaujinti nepavyko");
+        }
+      }, 500); // debounce to avoid flooding requests
+    };
+  })();
 
   return (
     <div className="runner-actions-card">
@@ -92,7 +85,7 @@ function RunnerActions() {
       <div className="add-runner">
         <input
           type="text"
-          placeholder="Runner name"
+          placeholder="Bėgiko vardas"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
@@ -101,51 +94,40 @@ function RunnerActions() {
 
       {message && <div className="message">{message}</div>}
 
-      <div className="runner-list">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Vardas</th>
-              <th>Reitingas</th>
-              <th>Veiksmai</th>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Vardas</th>
+            <th>Reitingas</th>
+            <th>Veiksmai</th>
+          </tr>
+        </thead>
+        <tbody>
+          {runners.map(r => (
+            <tr key={r.id}>
+              <td>{r.id}</td>
+              <td>{r.name}</td>
+              <td>
+                <input
+                  type="number"
+                  value={r.rating ?? 0}
+                  onChange={e => {
+                    const val = parseFloat(e.target.value) || 0;
+                    setRunners(prev =>
+                      prev.map(rr => rr.id === r.id ? { ...rr, rating: val } : rr)
+                    );
+                  }}
+                  onBlur={e => updateRating(r.id, parseFloat(e.target.value) || 0)}
+                />
+              </td>
+              <td>
+                <button onClick={() => deleteRunner(r.id)}>Naikinti</button>
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {runners.map((runner) => (
-              <tr key={runner.id}>
-                <td>{runner.id}</td>
-                <td>{runner.name}</td>
-                <td>
-                  <input
-                    type="number"
-                    defaultValue={runner.rating ?? 0}
-                    onChange = {(e) => {
-                      const val = parseFloat(e.target.value);
-                      setRunners(prev =>
-                        prev.map(r =>
-                          r.id === runner.id ? { ...r, rating: Number.isNaN(val) ? 0 : val } : r
-                        )
-                      );
-                    }}
-                    onBlur={(e) => {
-                      const val = parseFloat(e.target.value);
-                      updateRating(runner.id, Number.isNaN(val) ? 0 : val);
-                    }}
-                  />
-                </td>
-                <td>
-                  <button onClick={() => deleteRunner(runner.id)}>
-                    Naikinti
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
-
-export default RunnerActions;

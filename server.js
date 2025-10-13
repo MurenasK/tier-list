@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import Database from "better-sqlite3";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const app = express();
 const PORT = 4000;
@@ -79,6 +81,12 @@ app.patch("/api/runners/:id/elo", authMiddleware, (req, res) => {
   res.json({ message: `Runner ${id} Rating updated` });
 });
 
+app.delete("/api/runners/:id", authMiddleware, (req, res) => {
+  const { id } = req.params;
+  db.prepare("DELETE FROM runners WHERE id = ?").run(id);
+  res.json({ message: `Runner ${id} deleted` });
+});
+
 // Updates runner time
 const updateDateStmt = db.prepare(`
   UPDATE runners SET lastActiveDate = datetime('now') WHERE id = ?
@@ -148,6 +156,18 @@ app.get("/api/competitions", (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+// Support serving the frontend build
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use(express.static(path.join(__dirname, "dist")));
+
+// ✅ Fix for Express 5 — use "(.*)" instead of "*"
+app.get(/.*/, (req, res) => {
+  res.sendFile(path.join(__dirname, "dist", "index.html"));
+});
+
+
 
 // --- Start server ---
 app.listen(PORT, () => {

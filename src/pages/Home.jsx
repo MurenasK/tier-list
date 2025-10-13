@@ -1,6 +1,5 @@
 // pages/Home.jsx
 import Rankings from "../components/Rankings";
-import RankEditor from "../components/RankEditor";
 
 export default function Home() {
   return (

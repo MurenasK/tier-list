@@ -1,8 +1,6 @@
-// pages/Admin.jsx
 import { useState, useEffect } from "react";
 import RunnerActions from "../components/RunnerActions";
 import CompetitionForm from "../components/CompetitionForm";
-import RankEditor from "../components/RankEditor";
 
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -12,9 +10,7 @@ export default function Admin() {
 
   useEffect(() => {
     const storedAuth = localStorage.getItem("isAdmin");
-    if (storedAuth === "true") {
-      setIsAuthenticated(true);
-    }
+    if (storedAuth === "true") setIsAuthenticated(true);
   }, []);
 
   const handleLogin = (e) => {
@@ -23,7 +19,7 @@ export default function Admin() {
       setIsAuthenticated(true);
       localStorage.setItem("isAdmin", "true");
     } else {
-      alert("Neteisingas slaptažodis ❌");
+      alert("❌ Netinkamas slaptažodis");
     }
   };
 
@@ -72,17 +68,12 @@ export default function Admin() {
 
       <section className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-xl font-semibold mb-4">🏃 Tvarkyti bėgikus</h2>
-        <RunnerActions />
+        <RunnerActions /> {/* Optimized component */}
       </section>
 
       <section className="bg-gray-100 p-4 rounded shadow">
         <h2 className="text-xl font-semibold mb-4">📅 Pridėti Varžybas</h2>
-        <CompetitionForm />
-      </section>
-
-      <section className="bg-gray-100 p-4 rounded shadow">
-        <h2 className="text-xl font-semibold mb-4">🏁 Redaguoti reitingus</h2>
-        <RankEditor />
+        <CompetitionForm /> {/* Optimized component */}
       </section>
     </div>
   );

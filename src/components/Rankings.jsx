@@ -24,13 +24,22 @@ export default function Rankings() {
         <tbody>
           {runners
             .sort((a, b) => b.rating - a.rating)
-            .map((runner, i) => (
-              <tr key={runner.id}>
-                <td>{i + 1}</td>
-                <td>{runner.name}</td>
-                <td>{runner.rating}</td>
-              </tr>
-            ))}
+            .map((runner, i, arr) => {
+              // If this runner has the same rating as the previous one → same rank
+              const rank =
+                i > 0 && runner.rating === arr[i - 1].rating
+                  ? arr[i - 1].rank
+                  : i + 1;
+              runner.rank = rank; // attach rank so it can be reused for the next comparison
+
+              return (
+                <tr key={runner.id}>
+                  <td>{rank}</td>
+                  <td>{runner.name}</td>
+                  <td>{runner.rating}</td>
+                </tr>
+              );
+            })}
         </tbody>
       </table>
     </div>

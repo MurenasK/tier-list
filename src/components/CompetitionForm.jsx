@@ -1,11 +1,10 @@
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { calculateRatings } from "./calculateRatings";
 import "./CompsStyling/CompetitionForm.css";
 
 export default function CompetitionForm() {
   const [showForm, setShowForm] = useState(false);
-
   const [name, setName] = useState("");
   const [date, setDate] = useState("");
   const [difficulty, setDifficulty] = useState("medium");
@@ -14,49 +13,37 @@ export default function CompetitionForm() {
   const [specialRunnerPresent, setSpecialRunnerPresent] = useState(false);
   const [message, setMessage] = useState("");
   const [allRunners, setAllRunners] = useState([]);
-
-  const PASSWORD = "NiggasInParis"; // change this
-
-  const openForm = () => setShowForm(true);
-  const closeForm = () => setShowForm(false);
+  const hasFetched = useRef(false);
 
   useEffect(() => {
-    // Fetch all runners on mount
-    const fetchRunners = async () => {
-      try {
-        const res = await axios.get("http://localhost:4000/api/runners");
-        setAllRunners(res.data);
-      } catch (err) {
-        console.error("Failed to fetch runners:", err);
-      }
-    };
-
-    fetchRunners();
-  })
+    if (!hasFetched.current) {
+      const fetchRunners = async () => {
+        try {
+          const res = await axios.get("/api/runners");
+          setAllRunners(res.data);
+          hasFetched.current = true;
+        } catch (err) {
+          console.error("Nepavyko gauti bėgikų:", err);
+        }
+      };
+      fetchRunners();
+    }
+  }, []);
 
   const handleAddRunner = runner => {
-    // Only add if not already added
     if (!competitors.find(c => c.id === runner.id)) {
-      setCompetitors(prev => [
-        ...prev,
-        { ...runner, time: 0, participated: true },
-      ]);
+      setCompetitors(prev => [...prev, { ...runner, time: 0, participated: true }]);
     }
   };
 
   const updateCompetitor = (id, key, value) => {
-    setCompetitors(prev =>
-      prev.map(c => (c.id === id ? { ...c, [key]: value } : c))
-    );
+    setCompetitors(prev => prev.map(c => c.id === id ? { ...c, [key]: value } : c));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault();
-
     try {
       const activeCompetitors = competitors.filter(c => c.participated);
-
-      // 🧮 1️⃣ Calculate new ratings
       const updatedRatings = calculateRatings({
         runners: activeCompetitors,
         competitionType: difficulty,
@@ -64,116 +51,65 @@ export default function CompetitionForm() {
         specialRunnerPresent,
       });
 
-      // 💾 2️⃣ Save competition info to the backend
-      // We POST without competitors first
-      const compRes = await axios.post(
-        "http://localhost:4000/api/competitions",
-        { name, date, difficulty },
-        { headers: { Authorization: PASSWORD } }
-      );
+      // Save competition
+      const compRes = await axios.post("/api/competitions", { name, date, difficulty });
+      const competitionId = compRes.data.id;
 
-      const competitionId = compRes.data.id; // <-- make sure your backend returns the new competition ID!
+      // Add competitors
+      await axios.post(`/api/competitions/${competitionId}/runners`, {
+        runners: activeCompetitors.map(c => ({ id: c.id, time: c.time || 0 }))
+      });
 
-      // 🏃 3️⃣ Add competitors to this competition
-      await axios.post(
-        `http://localhost:4000/api/competitions/${competitionId}/runners`,
-        { 
-          runners: activeCompetitors.map(c => ({
-          id: c.id,
-          time: isNaN(c.time) ? 0 : c.time
-          }))
-        },
-        { headers: { Authorization: PASSWORD } }
-      );
-
-      // 🔁 4️⃣ Update each runner’s rating in your runners table
+      // Update ratings
       await Promise.all(
-        updatedRatings.map(async (runner) => {
-          try {
-            const rating = Number(runner.newRating);
-            if (Number.isNaN(rating)) {
-              console.warn(`⚠️ Skipping ${runner.name} — invalid rating:`, runner.newRating);
-              return;
-            }
-
-            await axios.patch(
-              `http://localhost:4000/api/runners/${runner.id}/elo`,
-              { rating }, // must be numeric
-              { headers: { Authorization: PASSWORD } }
-            );
-          } catch (err) {
-            console.warn(`⚠️ Failed to update runner ${runner.name}:`, err.response?.data || err.message);
-          }
+        updatedRatings.map(async r => {
+          await axios.patch(`/api/runners/${r.id}/elo`, { rating: r.newRating });
         })
       );
 
-
-      // 🧠 5️⃣ Update local state
-      setAllRunners((prev) =>
-        prev.map((r) => {
-          const updated = updatedRatings.find((u) => u.id === r.id);
+      // Update local runners
+      setAllRunners(prev =>
+        prev.map(r => {
+          const updated = updatedRatings.find(u => u.id === r.id);
           return updated ? { ...r, rating: updated.newRating } : r;
         })
       );
 
-      // ✅ 6️⃣ Success message
-      setMessage(`✅ Competition "${name}" saved & ratings updated!`);
+      setMessage(`✅ Varžybos "${name}" išsaugotos!`);
       setTimeout(() => setMessage(""), 4000);
 
-      // ♻️ 7️⃣ Reset form
-      setName("");
-      setDate("");
-      setDifficulty("medium");
-      setCompetitors([]);
-      setSpecialRunnerId(null);
-      setSpecialRunnerPresent(false);
-      closeForm();
+      // Reset form
+      setName(""); setDate(""); setDifficulty("medium");
+      setCompetitors([]); setSpecialRunnerId(null); setSpecialRunnerPresent(false);
+      setShowForm(false);
+
     } catch (err) {
       console.error("❌ Error submitting competition:", err);
-      setMessage("❌ Failed to save competition or update ratings: " + err.message);
+      setMessage("❌ Nepavyko išsaugoti varžybų");
     }
   };
 
-
-
   return (
     <>
-      <button onClick={openForm} className="open-form-btn">
-        🏁 Pridėti varžybas
-      </button>
+      <button onClick={() => setShowForm(true)} className="open-form-btn">🏁 Pridėti varžybas</button>
 
       {showForm && (
         <div className="competition-modal">
           <div className="competition-card">
-            <button className="close-btn" onClick={closeForm}>✖</button>
+            <button className="close-btn" onClick={() => setShowForm(false)}>✖</button>
             <h2>🏟️ Varžybos</h2>
 
             <form onSubmit={handleSubmit} className="competition-form">
-              <input
-                type="text"
-                placeholder="Competition name"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                required
-              />
-              <input
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-                required
-              />
-              <select
-                value={difficulty}
-                onChange={e => setDifficulty(e.target.value)}
-              >
+              <input type="text" placeholder="Varžybų pavadinimas" value={name} onChange={e => setName(e.target.value)} required />
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+              <select value={difficulty} onChange={e => setDifficulty(e.target.value)}>
                 <option value="local">Kaimo lyga</option>
                 <option value="outside">Užsienio random</option>
-                <option value="national">LT Čampas</option>
+                <option value="national">LT Čempionatas</option>
                 <option value="international">Užsienio už LT</option>
               </select>
 
               <hr />
-
               <h3>🏃 Pasirinkti bėgikus</h3>
               <div className="runner-list">
                 {allRunners.map(r => (
@@ -182,13 +118,7 @@ export default function CompetitionForm() {
                       <input
                         type="checkbox"
                         checked={!!competitors.find(c => c.id === r.id)?.participated}
-                        onChange={e =>
-                          e.target.checked
-                            ? handleAddRunner(r)
-                            : setCompetitors(prev =>
-                                prev.filter(c => c.id !== r.id)
-                              )
-                        }
+                        onChange={e => e.target.checked ? handleAddRunner(r) : setCompetitors(prev => prev.filter(c => c.id !== r.id))}
                       />
                       {r.name}
                     </label>
@@ -203,25 +133,9 @@ export default function CompetitionForm() {
                   {competitors.map(c => (
                     <div key={c.id} className="competitor-row">
                       <span>{c.name}</span>
-                      <input
-                        type="number"
-                        placeholder="Time (sec)"
-                        value={c.time ?? 0}
-                        onChange={e =>
-                          updateCompetitor(c.id, "time", parseFloat(e.target.value) || 0)
-                        }
-                        required
-                      />
+                      <input type="number" placeholder="Time (sec)" value={c.time ?? 0} onChange={e => updateCompetitor(c.id, "time", parseFloat(e.target.value) || 0)} required />
                       <label>
-                        <input
-                          type="checkbox"
-                          checked={specialRunnerId === c.id}
-                          disabled={!specialRunnerPresent}
-                          onChange={() =>
-                            setSpecialRunnerId(specialRunnerId === c.id ? null : c.id)
-                          }
-                        />
-                        JANUŠIS?
+                        <input type="checkbox" checked={specialRunnerId === c.id} disabled={!specialRunnerPresent} onChange={() => setSpecialRunnerId(specialRunnerId === c.id ? null : c.id)} /> JANUŠIS?
                       </label>
                     </div>
                   ))}
@@ -229,16 +143,10 @@ export default function CompetitionForm() {
               )}
 
               <label style={{ display: "block", marginTop: "10px" }}>
-                <input
-                  type="checkbox"
-                  checked={specialRunnerPresent}
-                  onChange={() => setSpecialRunnerPresent(!specialRunnerPresent)}
-                />{" "}
-                JANUŠIS DALYVAUJA?
+                <input type="checkbox" checked={specialRunnerPresent} onChange={() => setSpecialRunnerPresent(!specialRunnerPresent)} /> JANUŠIS DALYVAUJA?
               </label>
 
               <hr />
-
               <button type="submit">💾 Išsaugoti varžybas</button>
             </form>
 
