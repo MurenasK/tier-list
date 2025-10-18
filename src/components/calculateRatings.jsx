@@ -13,18 +13,14 @@ export function calculateRatings({
     international: 2.0,
   };
 
-  console.log("Calculating ratings for competition type:", competitionType);
-
   // --- Base constants ---
   const BASE_DECAY_RATE = 0.95;
   const MIN_DECAY_FACTOR = 0.7;
-  const TIME_IMPACT_DIVISOR = 5;
+  const TIME_IMPACT_DIVISOR = 3; // decreased to increase time effect
   const EXPECTATION_SPREAD = 400;
-  const ELO_SCALER = 200; // 🟩 boosts rating swings to Faceit-like range
-
-  // --- Max bounds (after scaling) ---
-  const MAX_GAIN = 50;
-  const MAX_LOSS = -50;
+  const ELO_SCALER = 300; // increased from 200 to boost delta
+  const MAX_GAIN = 80;    // increased max gain
+  const MAX_LOSS = -80;   // increased max loss
 
   const K = competitionCoefficients[competitionType] || 1.0;
 
@@ -36,10 +32,10 @@ export function calculateRatings({
       .slice(0, Math.min(5, sorted.length))
       .reduce((acc, r) => acc + r.rating, 0) / Math.min(5, sorted.length);
 
-  const K_adj = K * (avgTop5 / 2000);
+  const K_adj = K * (avgTop5 / 1500); // slightly more aggressive
   const avgTime = runners.reduce((sum, r) => sum + r.time, 0) / runners.length;
 
-  // --- Main calc ---
+  // --- Main calculation ---
   const updated = runners.map(r => {
     const { rating: R_i, rank, time, id, lastActiveDate } = r;
 
@@ -52,28 +48,28 @@ export function calculateRatings({
     const DecayFactor = Math.max(Math.pow(BASE_DECAY_RATE, monthsInactive), MIN_DECAY_FACTOR);
     const Balance = 1 - R_i / (L + 200);
 
-    // 🧮 Stronger base rating change
+    // --- Stronger base rating change ---
     let delta = K_adj * (S_i - E_i) * Balance * TPF_i * ELO_SCALER;
 
-    // ✅ Apply penalty only if special runner present and you were beaten by him
+    // Apply special runner penalty
     if (specialRunnerPresent && specialRunnerId) {
       const specialRunner = runners.find(rn => rn.id === specialRunnerId);
       const beatenBySpecial = specialRunner && rank > specialRunner.rank;
       if (beatenBySpecial && delta < 0) {
-        delta = delta * 2; // double the loss only if it's negative
+        delta *= 2; // double the loss
       }
     }
 
-    // ✂️ Cap values to your defined range
+    // Cap values
     delta = Math.max(Math.min(delta, MAX_GAIN), MAX_LOSS);
     const newRating = R_i * DecayFactor + delta;
 
     return {
       ...r,
-      expected: parseFloat(E_i.toFixed(3)),        // optional, if you want it as a number
-      placementScore: parseFloat(S_i.toFixed(3)), // optional
-      delta: Math.round(delta * 100) / 100,       // number, rounded to 2 decimals
-      newRating: Math.round(newRating * 100) / 100, // number, rounded to 2 decimals
+      expected: parseFloat(E_i.toFixed(3)),
+      placementScore: parseFloat(S_i.toFixed(3)),
+      delta: Math.round(delta * 100) / 100,
+      newRating: Math.round(newRating * 100) / 100,
     };
   });
 
