@@ -70,10 +70,10 @@ export function calculateRatings({
 
     return {
       ...r,
-      expected: E_i.toFixed(3),
-      placementScore: S_i.toFixed(3),
-      delta: delta.toFixed(2),
-      newRating: parseFloat(newRating.toFixed(2)),
+      expected: parseFloat(E_i.toFixed(3)),        // optional, if you want it as a number
+      placementScore: parseFloat(S_i.toFixed(3)), // optional
+      delta: Math.round(delta * 100) / 100,       // number, rounded to 2 decimals
+      newRating: Math.round(newRating * 100) / 100, // number, rounded to 2 decimals
     };
   });
 
