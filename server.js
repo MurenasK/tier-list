@@ -4,18 +4,26 @@ import Database from "better-sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const app = express();
-const PORT = 4000;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-app.use(cors());
+const app = express();
+const PORT = process.env.PORT || 4000;
+
+// ✅ Environment variables
+const PASSWORD = process.env.PASSWORD;
+
+// --- Middleware ---
 app.use(express.json());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "*", // replace FRONTEND_URL with your frontend domain
+  methods: ["GET","POST","PATCH","DELETE"],
+}));
 
 // --- Database ---
 const db = new Database("runners.db");
 
 // --- Tables ---
-
-// Runners table
 db.prepare(`
   CREATE TABLE IF NOT EXISTS runners (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,7 +34,6 @@ db.prepare(`
   )
 `).run();
 
-// Competitions table
 db.prepare(`
   CREATE TABLE IF NOT EXISTS competitions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,7 +43,6 @@ db.prepare(`
   )
 `).run();
 
-// Competition participants table
 db.prepare(`
   CREATE TABLE IF NOT EXISTS competition_runners (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,22 +58,31 @@ db.prepare(`
 // --- Auth Middleware ---
 const authMiddleware = (req, res, next) => {
   const auth = req.headers.authorization;
-  const PASSWORD = "NiggasInParis"; // change this
+  if (!PASSWORD) {
+    console.error("❌ Backend PASSWORD not set!");
+    return res.status(500).json({ error: "Server misconfigured" });
+  }
   if (auth === PASSWORD) next();
   else res.status(403).json({ error: "Forbidden" });
 };
 
 // --- Routes ---
 
-// Get all runners
+// Get all runners (public)
 app.get("/api/runners", (req, res) => {
-  const runners = db.prepare("SELECT * FROM runners").all();
-  res.json(runners);
+  try {
+    const runners = db.prepare("SELECT * FROM runners").all();
+    res.json(runners);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
-// Add runner
+// Add runner (admin)
 app.post("/api/runners", authMiddleware, (req, res) => {
   const { name } = req.body;
+  if (!name) return res.status(400).json({ error: "Name is required" });
   const info = db.prepare("INSERT INTO runners (name) VALUES (?)").run(name);
   res.json({ message: "Runner added!", id: info.lastInsertRowid });
 });
@@ -78,28 +93,15 @@ app.patch("/api/runners/:id/elo", authMiddleware, (req, res) => {
   const { rating } = req.body;
   if (rating == null) return res.status(400).json({ error: "Rating is required" });
   db.prepare("UPDATE runners SET rating = ? WHERE id = ?").run(rating, id);
-  res.json({ message: `Runner ${id} Rating updated` });
+  res.json({ message: `Runner ${id} rating updated` });
 });
 
+// Delete runner
 app.delete("/api/runners/:id", authMiddleware, (req, res) => {
   const { id } = req.params;
   db.prepare("DELETE FROM runners WHERE id = ?").run(id);
   res.json({ message: `Runner ${id} deleted` });
 });
-
-// Updates runner time
-const updateDateStmt = db.prepare(`
-  UPDATE runners SET lastActiveDate = datetime('now') WHERE id = ?
-`);
-
-const insertMany = db.transaction((runners) => {
-  for (const r of runners) {
-    stmt.run(competition_id, r.id, r.time || 0);
-    updateDateStmt.run(r.id); // mark runner as active
-  }
-});
-
-// --- Competitions ---
 
 // Add competition
 app.post("/api/competitions", authMiddleware, (req, res) => {
@@ -108,12 +110,11 @@ app.post("/api/competitions", authMiddleware, (req, res) => {
   res.json({ message: "Competition added!", id: info.lastInsertRowid });
 });
 
-// Add runners to a competition with times
+// Add runners to a competition
 app.post("/api/competitions/:id/runners", authMiddleware, (req, res) => {
   try {
     const { id: competition_id } = req.params;
     const { runners } = req.body; // [{ id: runnerId, time: 123 }, ...]
-
     if (!Array.isArray(runners)) return res.status(400).json({ error: "runners must be an array" });
 
     const stmt = db.prepare(`
@@ -157,19 +158,13 @@ app.get("/api/competitions", (req, res) => {
   }
 });
 
-// Support serving the frontend build
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Serve React frontend
 app.use(express.static(path.join(__dirname, "dist")));
-
-// ✅ Fix for Express 5 — use "(.*)" instead of "*"
 app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, "dist", "index.html"));
 });
 
-
-
 // --- Start server ---
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
