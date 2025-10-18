@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import api from "./api"; // 👈 our axios instance
 
 export default function RunnerActions() {
   const [runners, setRunners] = useState([]);
@@ -10,9 +11,8 @@ export default function RunnerActions() {
     if (!hasFetched.current) {
       const fetchRunners = async () => {
         try {
-          const res = await fetch("/api/runners");
-          const data = await res.json();
-          setRunners(data);
+          const res = await api.get("/api/runners");
+          setRunners(res.data);
           hasFetched.current = true;
         } catch (err) {
           console.error(err);
@@ -26,13 +26,8 @@ export default function RunnerActions() {
   const addRunner = async () => {
     if (!name.trim()) return;
     try {
-      const res = await fetch("/api/runners", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      if (!res.ok) throw new Error("Nepavyko pridėti bėgiko");
-      const data = await res.json();
+      const res = await api.post("/api/runners", { name });
+      const data = res.data;
       setRunners(prev => [...prev, { id: data.id, name, rating: 1000 }]);
       setMessage("✅ Bėgikas pridėtas");
       setName("");
@@ -44,8 +39,7 @@ export default function RunnerActions() {
 
   const deleteRunner = async (id) => {
     try {
-      const res = await fetch(`/api/runners/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Nepavyko ištrinti");
+      await api.delete(`/api/runners/${id}`);
       setRunners(prev => prev.filter(r => r.id !== id));
       setMessage(`🗑️ Bėgikas ${id} ištrintas`);
     } catch (err) {
@@ -63,18 +57,13 @@ export default function RunnerActions() {
       clearTimeout(timeout);
       timeout = setTimeout(async () => {
         try {
-          const res = await fetch(`/api/runners/${id}/elo`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ rating }),
-          });
-          if (!res.ok) throw new Error("Nepavyko atnaujinti reitingo");
+          await api.patch(`/api/runners/${id}/elo`, { rating });
           setMessage(`🏅 Bėgiko ${id} reitingas atnaujintas`);
         } catch (err) {
           console.error(err);
           setMessage("❌ Reitingo atnaujinti nepavyko");
         }
-      }, 500); // debounce to avoid flooding requests
+      }, 500); // debounce
     };
   })();
 

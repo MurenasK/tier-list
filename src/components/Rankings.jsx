@@ -1,15 +1,26 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "./api"; // 👈 centralized Axios instance
 
 export default function Rankings() {
   const [runners, setRunners] = useState([]);
 
   useEffect(() => {
-    axios
-      .get("http://localhost:4000/api/runners")
-      .then((res) => setRunners(res.data))
-      .catch((err) => console.error(err));
+    const fetchRunners = async () => {
+      try {
+        const res = await api.get("/api/runners");
+        setRunners(res.data);
+      } catch (err) {
+        console.error("Nepavyko gauti bėgikų:", err);
+      }
+    };
+
+    fetchRunners();
   }, []);
+
+  // Sort runners and calculate rank (ties get same rank)
+  const sortedRunners = [...runners].sort((a, b) => b.rating - a.rating);
+  let lastRating = null;
+  let lastRank = 0;
 
   return (
     <div className="rankings-card">
@@ -17,29 +28,24 @@ export default function Rankings() {
         <thead>
           <tr>
             <th>Vieta</th>
-            <th>Begikas</th>
+            <th>Bėgikas</th>
             <th>Reitingas</th>
           </tr>
         </thead>
         <tbody>
-          {runners
-            .sort((a, b) => b.rating - a.rating)
-            .map((runner, i, arr) => {
-              // If this runner has the same rating as the previous one → same rank
-              const rank =
-                i > 0 && runner.rating === arr[i - 1].rating
-                  ? arr[i - 1].rank
-                  : i + 1;
-              runner.rank = rank; // attach rank so it can be reused for the next comparison
+          {sortedRunners.map((runner, i) => {
+            const rank = runner.rating === lastRating ? lastRank : i + 1;
+            lastRating = runner.rating;
+            lastRank = rank;
 
-              return (
-                <tr key={runner.id}>
-                  <td>{rank}</td>
-                  <td>{runner.name}</td>
-                  <td>{runner.rating}</td>
-                </tr>
-              );
-            })}
+            return (
+              <tr key={runner.id}>
+                <td>{rank}</td>
+                <td>{runner.name}</td>
+                <td>{runner.rating}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
