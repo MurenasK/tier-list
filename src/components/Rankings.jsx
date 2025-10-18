@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import api from "./api"; // 👈 centralized Axios instance
+import api from "../api"; // 👈 centralized Axios instance
 
 export default function Rankings() {
   const [runners, setRunners] = useState([]);

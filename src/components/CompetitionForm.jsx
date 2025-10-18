@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import api from "./api"; // 👈 use our axios instance
+import api from "../api"; // 👈 use our axios instance
 import { calculateRatings } from "./calculateRatings";
 import "./CompsStyling/CompetitionForm.css";
 
