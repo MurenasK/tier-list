@@ -28,9 +28,12 @@ if (!DATABASE_URL) {
 const pool = new pg.Pool({
     connectionString: DATABASE_URL,
     // Optional: Add SSL configuration if your Render database requires it (often needed for external connections)
-    // ssl: {
-    //     rejectUnauthorized: false // Use this if Render requires strict SSL but you don't have a ca file
-    // }
+    ssl: {
+        // This is necessary when connecting from one Render service (your web service)
+        // to another Render service (your managed database).
+        // It tells the client to NOT reject the connection due to an unknown certificate.
+        rejectUnauthorized: false
+    }
 });
 
 // Utility function to execute a query (handles connection/release)
