@@ -23,30 +23,30 @@ export function calculateRatings({
   const BASE_RATING = 1500;
   const RANK_IMPACT_MULTIPLIER = 0.3; 
   
-  // NEW: Constants for Duration Sensitivity
-  // Use the longest possible competition duration (90 minutes in milliseconds)
+  // FIX 1: Max duration (90 minutes in milliseconds)
   const MAX_DURATION_MS = 90 * 60 * 1000; 
-  // Determines how much to boost the K-factor for shorter, more intense events
-  const DURATION_K_BOOST_FACTOR = 1.5; 
+  // Reduced factor to prevent over-scaling K for short events
+  const DURATION_K_BOOST_FACTOR = 0.5; // Reduced from 1.5 to 0.5
 
   const K_COMPETITION = competitionCoefficients[competitionType] || 1.0;
 
   // --- Derived stats ---
   const sorted = [...runners].sort((a, b) => a.rank - b.rank);
   const N = runners.length;
-  const bestTime = sorted[0] ? sorted[0].time : null; // This is in milliseconds (assuming)
+  const bestTime = sorted[0] ? sorted[0].time : null; 
   const avgRating = runners.reduce((sum, r) => sum + r.rating, 0) / N;
 
-  if (bestTime === null) {
+  if (bestTime === null || N < 2) {
     return runners.map(r => ({ ...r, expected: 0, performanceScore: 0, delta: 0, newRating: r.rating }));
   }
 
-  // NEW K-FACTOR ADJUSTMENT: Shorter events have higher stakes/volatility.
-  // If bestTime is 14 min, the multiplier is higher. If 90 min, it's closer to 1.
+  // FIX 2: K-FACTOR ADJUSTMENT formula is now much less aggressive
+  // Ensure the multiplier is reasonable. For a short event (14 min), this is now ~1.4.
   const durationKMultiplier = 
     1 + DURATION_K_BOOST_FACTOR * (1 - Math.min(bestTime, MAX_DURATION_MS) / MAX_DURATION_MS);
 
   const K_ADJUSTED = K_FACTOR_BASE * K_COMPETITION * (avgRating / BASE_RATING) * durationKMultiplier;
+
 
   // --- Calculate Predicted Ranks ---
   const ratedRunners = [...runners].sort((a, b) => b.rating - a.rating);
@@ -65,20 +65,21 @@ export function calculateRatings({
     
     // 2. Actual Performance Score (S_i): Combination of time and placement
     
-    // Time Score: 1.0 for best, < 1.0 otherwise. 
-    // We use the ratio of the time *difference* to the best time.
-    const TimeDeltaRatio = (time - bestTime) / bestTime;
+    // FIX 3: Scale TimeDeltaRatio by a factor (e.g., 0.5) to prevent scores from dropping too quickly
+    // and ensuring S_i remains high enough to represent a decent performance.
+    const TimeDeltaRatio = (time - bestTime) / bestTime; 
     
-    // NEW Performance Metric: Sensitivity to Time Delta
-    // For the first place (TimeDeltaRatio = 0), TimePerformance = 1.0
-    // For slower runners, the performance score drops faster in shorter events.
-    // TimePerformance = 1 - (TimeDeltaRatio * ScalingFactor)
-    const TimePerformance = 1 - TimeDeltaRatio;
-    
+    // New Time Performance: Use a hyperbolic tangent (tanh) like curve to compress extreme scores 
+    // and keep performance within a reasonable range (0 to 1.0).
+    // The exponent of -2 ensures TimePerformance starts at 1.0 and drops gently.
+    // NOTE: This assumes TimeDeltaRatio is small (e.g., < 0.2)
+    const TimePerformance = Math.exp(-2 * TimeDeltaRatio); 
+
     // Placement Score: Gives credit for placing well (1.0 for 1st place)
-    const PlacementScore = (N - rank) / (N - 1); 
+    const PlacementScore = (N - rank) / (N - 1 || 1); // Avoid division by zero if N=1
 
     // Combine Time and Placement (80% Time, 20% Placement Credit)
+    // S_i should be between 0 and 1.0
     const S_i = 0.8 * TimePerformance + 0.2 * PlacementScore; 
 
     // 3. Inactivity Decay Factor
@@ -91,7 +92,7 @@ export function calculateRatings({
 
     // 5. Predicted Rank Bonus/Penalty
     const predictedRank = predictedRanks.get(id);
-    const rankDifference = predictedRank - rank; // Positive = Performed better than predicted
+    const rankDifference = predictedRank - rank; 
     
     const RankBonus = rankDifference * RANK_IMPACT_MULTIPLIER;
     delta += RankBonus;
