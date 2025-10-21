@@ -7,7 +7,7 @@ export default function CompetitionForm() {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [date, setDate] = useState("");
-  const [difficulty, setDifficulty] = useState("medium");
+  const [difficulty, setDifficulty] = useState("local");
   const [competitors, setCompetitors] = useState([]);
   const [specialRunnerId, setSpecialRunnerId] = useState(null);
   const [specialRunnerPresent, setSpecialRunnerPresent] = useState(false);
