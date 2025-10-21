@@ -61,15 +61,15 @@ export function calculateRatings({
   const updated = rankedRunners.map(r => {
     const { rating: R_i, rank, time, id, lastActiveDate } = r;
 
-    // 1. Expected Score (E_i): RE-INTRODUCED. Calculated against the Competition Average Rating.
-    // This allows for negative points if a runner performs worse than their rating suggests.
+    // 1. Expected Score (E_i): Calculated against the Competition Average Rating.
     const E_i = 1 / (1 + Math.pow(10, (avgRating - R_i) / ELO_SCALE));
     
     // 2. Actual Performance Score (S_i): Combination of time and placement
     const TimeDeltaRatio = (time - bestTime) / bestTime; 
     
     // Time Performance: Exponential decay from 1.0. 
-    const TimePerformance = Math.exp(-2 * TimeDeltaRatio); 
+    // *** Harsher penalty on slow times: Coefficient -4 ***
+    const TimePerformance = Math.exp(-4 * TimeDeltaRatio); 
 
     // Placement Score: Gives credit for placing well (1.0 for 1st place)
     const PlacementScore = (N - rank) / (N - 1 || 1); 
@@ -82,16 +82,13 @@ export function calculateRatings({
       (today - new Date(lastActiveDate || today)) / (1000 * 60 * 60 * 24 * 30);
     const DecayFactor = Math.max(Math.pow(BASE_DECAY_RATE, monthsInactive), MIN_DECAY_FACTOR);
     
-    // --- RATING NORMALIZATION / K-FACTOR DECAY (New Logic for Top Leaders) ---
-    // The K-factor (volatility) is reduced for high-rated runners (e.g., > 1500)
-    // This prevents top leaders from running away too quickly.
+    // --- RATING NORMALIZATION / K-FACTOR DECAY ---
     const kDecayMultiplier = 
       1 / (1 + Math.exp((R_i - RATING_NORMALIZER) / K_DECAY_RATING_SCALE));
     
     const K_i = K_BASE_ADJUSTED * kDecayMultiplier;
 
-    // 4. Rating Delta (Gain/Loss) - Standard ELO logic RE-ESTABLISHED
-    // delta = K_i * (Actual Score - Expected Score)
+    // 4. Rating Delta (Gain/Loss) - Standard ELO logic
     let delta = K_i * (S_i - E_i);
 
     // 5. Predicted Rank Bonus/Penalty
@@ -101,25 +98,38 @@ export function calculateRatings({
     const RankBonus = rankDifference * RANK_IMPACT_MULTIPLIER;
     delta += RankBonus;
     
-    // Apply special runner penalty (Existing logic)
+    // 6. Apply special runner penalty (REVISED LOGIC)
     if (specialRunnerPresent && specialRunnerId) {
       const specialRunner = runners.find(rn => rn.id === specialRunnerId);
       const beatenBySpecial = specialRunner && rank > specialRunner.rank;
-      if (beatenBySpecial && delta < 0) {
-        delta *= 2; 
+
+      if (beatenBySpecial) {
+        // ** GUARANTEED PENALTY LOGIC **
+        // Penalty is based on the runner's K-factor and their ELO expectation (E_i).
+        // This ensures the penalty is relative to the runner's rating and is large enough to negate small gains.
+        const guaranteedPenalty = K_i * E_i; 
+
+        // If the runner's delta is positive (or zero), we nullify it first.
+        if (delta >= 0) {
+          delta = 0;
+        }
+
+        // Apply the guaranteed penalty. This will turn any zero/small positive delta into a loss, 
+        // and significantly increase any existing loss.
+        delta -= guaranteedPenalty;
       }
     }
 
-    // 6. Cap values and make it an INTEGER (-50 to 50)
+    // 7. Cap values and make it an INTEGER (-50 to 50)
     delta = Math.max(Math.min(delta, MAX_GAIN), MAX_LOSS);
     const integerDelta = Math.round(delta);
     
-    // 7. Calculate New Rating (Apply Decay *before* delta) and make it an INTEGER
+    // 8. Calculate New Rating (Apply Decay *before* delta) and make it an INTEGER
     const newRating = Math.round(R_i * DecayFactor + integerDelta);
 
     return {
       ...r,
-      expected: parseFloat(E_i.toFixed(3)), // E_i re-introduced
+      expected: parseFloat(E_i.toFixed(3)),
       performanceScore: parseFloat(S_i.toFixed(3)),
       predictedRank: predictedRank,
       delta: integerDelta,
