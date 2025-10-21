@@ -1,4 +1,3 @@
-// utils/calculateRatings.js
 export function calculateRatings({
   runners,
   competitionType = "local",
@@ -16,19 +15,19 @@ export function calculateRatings({
   // --- Base constants (Dampened K-factor) ---
   const BASE_DECAY_RATE = 0.95;
   const MIN_DECAY_FACTOR = 0.7;
-  // FIX 1: Reduced Base K-factor from 40 to 30 to dampen volatility
-  const K_FACTOR_BASE = 30; 
+  
+  const K_FACTOR_BASE = 20; 
   const ELO_SCALE = 400; 
   const MAX_GAIN = 50; 
   const MAX_LOSS = -50; 
-  // BASE_RATING is now only used for the K-factor normalization, not E_i
+  
+  // Used as the center point for K-factor normalization (e.g., standard starting rating)
   const RATING_NORMALIZER = 1500; 
+  // Scale factor for the K-factor normalization curve (higher number = less dampening)
+  const K_DECAY_RATING_SCALE = 300;
+  
   const RANK_IMPACT_MULTIPLIER = 0.3; 
   
-  // Constants for Duration Sensitivity (Kept conservative)
-  const MAX_DURATION_MS = 90 * 60 * 1000; 
-  const DURATION_K_BOOST_FACTOR = 0.5; 
-
   const K_COMPETITION = competitionCoefficients[competitionType] || 1.0;
 
   // --- Derived stats ---
@@ -41,18 +40,13 @@ export function calculateRatings({
   if (bestTime === null || N < 2) {
     return runners.map(r => ({ ...r, expected: 0, performanceScore: 0, delta: 0, newRating: r.rating }));
   }
-    
-  // Assign actual ranks based on time (1st place gets rank 1)
-  const rankedRunners = sorted.map((r, index) => ({...r, rank: index + 1}));
+    
+  // Assign actual ranks based on time (1st place gets rank 1)
+  const rankedRunners = sorted.map((r, index) => ({...r, rank: index + 1}));
 
-  // K-FACTOR ADJUSTMENT
-  const durationKMultiplier = 
-    1 + DURATION_K_BOOST_FACTOR * (1 - Math.min(bestTime, MAX_DURATION_MS) / MAX_DURATION_MS);
-
-  // Normalization based on average rating vs. standard (1500)
-  const ratingNormalizationFactor = avgRating / RATING_NORMALIZER; 
-  
-  const K_ADJUSTED = K_FACTOR_BASE * K_COMPETITION * ratingNormalizationFactor * durationKMultiplier;
+  // K-FACTOR ADJUSTMENT (Simplified to base and competition only)
+  // Individual runner K-factor normalization will be calculated inside the map loop.
+  const K_BASE_ADJUSTED = K_FACTOR_BASE * K_COMPETITION;
 
 
   // --- Calculate Predicted Ranks (based on current ratings) ---
@@ -67,17 +61,14 @@ export function calculateRatings({
   const updated = rankedRunners.map(r => {
     const { rating: R_i, rank, time, id, lastActiveDate } = r;
 
-    // FIX 2: Expected Score (E_i) is calculated against the Competition Average Rating.
-    // This centers the expectation around the group's performance.
-    // Runners above avgRating will have E_i > 0.5 (expected to perform better than average)
-    // Runners below avgRating will have E_i < 0.5 (expected to perform worse than average)
+    // 1. Expected Score (E_i): RE-INTRODUCED. Calculated against the Competition Average Rating.
+    // This allows for negative points if a runner performs worse than their rating suggests.
     const E_i = 1 / (1 + Math.pow(10, (avgRating - R_i) / ELO_SCALE));
     
     // 2. Actual Performance Score (S_i): Combination of time and placement
     const TimeDeltaRatio = (time - bestTime) / bestTime; 
     
     // Time Performance: Exponential decay from 1.0. 
-    // This is the actual score achieved based on time.
     const TimePerformance = Math.exp(-2 * TimeDeltaRatio); 
 
     // Placement Score: Gives credit for placing well (1.0 for 1st place)
@@ -91,8 +82,17 @@ export function calculateRatings({
       (today - new Date(lastActiveDate || today)) / (1000 * 60 * 60 * 24 * 30);
     const DecayFactor = Math.max(Math.pow(BASE_DECAY_RATE, monthsInactive), MIN_DECAY_FACTOR);
     
-    // 4. Rating Delta (Gain/Loss) - Base ELO logic
-    let delta = K_ADJUSTED * (S_i - E_i);
+    // --- RATING NORMALIZATION / K-FACTOR DECAY (New Logic for Top Leaders) ---
+    // The K-factor (volatility) is reduced for high-rated runners (e.g., > 1500)
+    // This prevents top leaders from running away too quickly.
+    const kDecayMultiplier = 
+      1 / (1 + Math.exp((R_i - RATING_NORMALIZER) / K_DECAY_RATING_SCALE));
+    
+    const K_i = K_BASE_ADJUSTED * kDecayMultiplier;
+
+    // 4. Rating Delta (Gain/Loss) - Standard ELO logic RE-ESTABLISHED
+    // delta = K_i * (Actual Score - Expected Score)
+    let delta = K_i * (S_i - E_i);
 
     // 5. Predicted Rank Bonus/Penalty
     const predictedRank = predictedRanks.get(id);
@@ -110,7 +110,7 @@ export function calculateRatings({
       }
     }
 
-    // 6. Cap values and make it an INTEGER
+    // 6. Cap values and make it an INTEGER (-50 to 50)
     delta = Math.max(Math.min(delta, MAX_GAIN), MAX_LOSS);
     const integerDelta = Math.round(delta);
     
@@ -119,7 +119,7 @@ export function calculateRatings({
 
     return {
       ...r,
-      expected: parseFloat(E_i.toFixed(3)),
+      expected: parseFloat(E_i.toFixed(3)), // E_i re-introduced
       performanceScore: parseFloat(S_i.toFixed(3)),
       predictedRank: predictedRank,
       delta: integerDelta,
