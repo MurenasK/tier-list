@@ -17,7 +17,7 @@ export function calculateRatings({
   const MIN_DECAY_FACTOR = 0.7;
   
   // K_FACTOR_BASE sumažintas iki 10, siekiant dar labiau sumažinti taškų svyravimus.
-  const K_FACTOR_BASE = 10; 
+  const K_FACTOR_BASE = 30; 
   const ELO_SCALE = 400; 
   const MAX_GAIN = 50; 
   const MAX_LOSS = -50; 
