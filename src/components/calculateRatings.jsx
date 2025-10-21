@@ -133,6 +133,7 @@ export function calculateRatings({
     
     // 8. Apskaičiuoti Naują Reitingą (Taikyti Nuosmukį *prieš* delta) ir paversti SVEIKAISIAIS SKAIČIAIS
     const newRating = Math.round(R_i * DecayFactor + integerDelta);
+    console.log(`Runner ID: ${id}, Old Rating: ${R_i}, DecayFactor: ${DecayFactor.toFixed(3)}, Delta: ${integerDelta}, New Rating: ${newRating}`);
 
     return {
       ...r,

@@ -12,7 +12,7 @@ export default function CompetitionForm() {
   const [specialRunnerId, setSpecialRunnerId] = useState(null);
   const [specialRunnerPresent, setSpecialRunnerPresent] = useState(false);
   const [message, setMessage] = useState("");
-  const [allRunners, setAllRunners] = useState([]);
+  const [allRunners, setAllRunners] = useState([]); 
   const hasFetched = useRef(false);
 
   useEffect(() => {
